@@ -1,0 +1,40 @@
+{
+  "name": "@local/huibao-bot",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "src/",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "peerDependencies": {},
+  "scripts": {
+    "check": "node --check index.js && node --check client.js"
+  },
+  "meta": {
+    "title": "汇报助手",
+    "description": "聚今日会议/通知/待办/逾期，生成重点+清单，推给小歪语音播报；会前可配置提醒。"
+  }
+}
