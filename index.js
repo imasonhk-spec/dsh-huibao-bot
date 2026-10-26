@@ -83,7 +83,7 @@ export function apply(ctx, config = {}) {
           kind: 'prefix',
           path: PREFIX,
           handler(req, res) {
-            if (__lic.intercept(req, res)) return; /* PATCH:V5-o2pack-guard */
+            if (__lic.guard(req, res)) return; /* PATCH:V5-o2pack-guard */
             const url = new URL(req.url || '/', 'http://localhost');
             let connection;
             try {
