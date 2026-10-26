@@ -1,7 +1,7 @@
-# 脱敏报告 · dsh-huibao-bot 0.1.4
+# 脱敏报告 · huibao-bot 0.1.5
 
 - 来源: `/home/lgsj/.dsh/profiles/web/node_modules/@local/huibao-bot`（8.6 线上活副本）
-- 文件数: 13
+- 文件数: 15
 
 ## 密钥/Token/密码: 0 个文件
 

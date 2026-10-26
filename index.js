@@ -39,10 +39,16 @@ export const MANIFEST = {
 
 let PACK_CONTEXT = null;
 
+import { installLicense } from './license-http.mjs'; /* PATCH:V5-o2pack-import */
 export const inject = ['webServer', 'tools'];
 
 export function apply(ctx, config = {}) {
   const disposers = [];
+
+  /* PATCH:V5-o2pack-apply */
+  // 授权门禁：本插件自带授权运行时，不依赖工作台；apply 阶段绝不 throw
+  const __lic = installLicense(ctx, { pluginId: 'huibao-bot', prefix: '/api/huibao-bot' });
+  try { disposers.push(() => { try { __lic.gate.flush(); } catch {} }); } catch {}
   PACK_CONTEXT = ctx;
   disposers.push(() => {
     PACK_CONTEXT = null;
@@ -77,6 +83,7 @@ export function apply(ctx, config = {}) {
           kind: 'prefix',
           path: PREFIX,
           handler(req, res) {
+            if (__lic.intercept(req, res)) return; /* PATCH:V5-o2pack-guard */
             const url = new URL(req.url || '/', 'http://localhost');
             let connection;
             try {
