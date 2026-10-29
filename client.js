@@ -824,7 +824,12 @@ window.__ModuleLoader__.load({
 /* 授权锁屏：内联自 license-panel.js（判 usable，零票轮询） */
 /* license-panel.js —— DSH 插件授权锁屏（浏览器侧，零依赖，内联进插件 client.js）
  *
+ * v1.2 · 2026-10-29  ★ SILENT：默认**不再弹激活界面** ★
+ *
  * 设计约束（改这个文件前必须读）：
+ *  0. 【v1.2 最重要】只要 state.silent 为真（门禁 v1.2 默认），本面板**永不锁屏**。
+ *     客户装完即用，看不到任何激活码输入框。这是产品决定，不是降级兜底。
+ *     要恢复锁屏，需服务端/环境变量把门禁切回严格模式（DSH_LICENSE_SILENT=0）。
  *  1. 判「能不能用」只看 state.usable，**不是** state.ready。
  *     gate.state() 的 ready = !reason && !pending —— pool=0 时它依然是 true。
  *     用 ready 判会出现「界面显示已授权，一点就 403」（方案 §4.5 / 计划 F5）。
@@ -833,6 +838,8 @@ window.__ModuleLoader__.load({
  *  3. 网络故障一律 fail-open：不锁屏、只提示并继续重试。
  *     平台停服/断网不该让客户以为授权丢了（T12）。
  *  4. 不 import 任何东西：由 license_build.py 直接把本文件拼进 client.js。
+ *  5. 【v1.2】pool===0 不再兜底成 no_ticket —— 免票模式下 pool 恒为 0，
+ *     旧兜底会把“正常可用”误判成“票已用尽”，是 v1.1 误锁屏的元凶之一。
  *
  * 用法（插件 client.js 里）：
  *   mountLicenseGate({ pluginId: 'huiwen-ppt', prefix: '/api/huiwen-ppt' });
@@ -861,11 +868,26 @@ window.__ModuleLoader__.load({
       // 拿不到状态（网络/未插桩）→ fail-open，不锁
       return { lock: false, title: '', desc: '', canAct: false, unknown: true };
     }
+    /* ★ v1.2b 顺序修正（重要）：
+       旧版把 `silent === true → 不锁` 放在最前面，导致**被吊销时也不锁** ——
+       客户看到的是「界面能打开、每个功能都 403」，比直接告知"已停用"更糟。
+       现在：先看「是否被服务商主动停用」，是就锁；否则静默模式一律不锁。
+       ⚠️ 不能用 state.lockable 当前置条件：严格模式（silent=false）下 lockable 恒为 true，
+          那会把正常用户也锁掉。这里只认「吊销」这两个原因。 */
+    var r0 = state.reason || '';
+    if (r0 === 'revoked' || r0 === 'not_active') {
+      var bm = REASONS[r0] || REASONS.revoked;
+      return { lock: true, reason: r0, title: bm.t, desc: bm.d, canAct: !!bm.act };
+    }
+    /* 静默模式（v1.2 默认）：客户永远看不到激活界面。 */
+    if (state.silent === true) {
+      return { lock: false, title: '', desc: '', canAct: false, silent: true };
+    }
     if (state.usable === true) return { lock: false, title: '', desc: '', canAct: false };
-    // 没有 reason 但不可用，最常见的就是"票池空了"：gate.state() 在 pool=0 时
-    // reason 仍是 null（票是可再补的燃料，不是终态错误）。不兜这一层的话
-    // 界面会显示"原因：未知"，现场既看不懂也没法自助（导包/联网补票就能好）。
-    var r = state.reason || (state.pending ? 'pending' : (state.pool === 0 ? 'no_ticket' : ''));
+    /* v1.2：不再用 pool===0 兜底成 no_ticket —— 免票模式下 pool 恒 0，会把正常状态误判成
+       “票已用尽”。只在明确拿到 reason 时才锁；拿不到 reason 就 fail-open。 */
+    var r = state.reason || (state.pending ? 'pending' : '');
+    if (!r) return { lock: false, title: '', desc: '', canAct: false, unknown: true };
     var m = REASONS[r] || { t: '授权不可用', d: '原因：' + (r || '未知') + '，请联系服务商。', act: false };
     return { lock: true, reason: r, title: m.t, desc: m.d, canAct: !!m.act };
   }
@@ -1098,5 +1120,5 @@ window.__ModuleLoader__.load({
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (global) global.mountLicenseGate = mountLicenseGate, global.licenseGateDecision = licenseGateDecision;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
-
 try { if (typeof mountLicenseGate === 'function') mountLicenseGate({ pluginId: "huibao-bot", prefix: "/api/huibao-bot" }); } catch (e) {}
+
