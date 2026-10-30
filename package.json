@@ -1,6 +1,6 @@
 {
   "name": "@local/huibao-bot",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -13,7 +13,12 @@
     "client.js",
     "src/",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "license-gate.mjs",
+    "license-http.mjs",
+    "package.json",
+    "install-manifest.json",
+    "license-panel.js"
   ],
   "dsh": {
     "bundle": {
