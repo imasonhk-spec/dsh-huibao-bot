@@ -1,0 +1,16 @@
+{% extends "base_2c.html" %}
+{% block page_title %}声音 · 龙数惠宝{% endblock %}
+{% block extra_head %}
+<script src="{{ url_for('static', filename='vendor/vue.global.prod.min.js') }}"></script>
+<script src="{{ url_for('static', filename='gateway_tts.js', v='dual-tts-v1') }}"></script>
+{% endblock %}
+{% block content %}
+<div id="voiceGateway" class="longshu-voice-page" v-cloak>
+  <div class="pagehd"><div><div class="eyebrow">LONGSHU · VOICE</div><h1>给惠宝选一个声音</h1><p>选择当前模型支持的音色后，点击“保存声音配置”或“保存并试听”。</p></div></div>
+  {% include 'app2c/_gateway_tts.html' %}
+</div>
+{% endblock %}
+{% block scripts %}<script>
+Vue.createApp({delimiters:['[[',']]'],mixins:[LongshuTtsUI],mounted(){this.loadTtsConfig();},
+  beforeUnmount(){if(this.tts.audioUrl)URL.revokeObjectURL(this.tts.audioUrl);}}).mount('#voiceGateway');
+</script>{% endblock %}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "release": "R6",
+  "files": [
+    {
+      "path": "src/deskbot_server/speech_status.py",
+      "sha256": "145ce50cea5944c2e9986e1c7825a4aa988b87bbbbf43c4b7acd1178bc6890b2"
+    },
+    {
+      "path": "src/deskbot_server/tts/gateway.py",
+      "sha256": "3326bd09bd93f41c6543fc78e3940c4b0bfd4627e056faa429afe481fa98de1f"
+    },
+    {
+      "path": "src/deskbot_server/web/app.py",
+      "sha256": "25e87d24cccf5cf9a1380924783404a7d6a27a9d35233013d48fdd030ca48090"
+    },
+    {
+      "path": "src/deskbot_server/web/blueprints/gateway_bp.py",
+      "sha256": "afbd097eabd13d898fb2c42c83550a32e327dc01045339c34835b8f6e91bdd90"
+    },
+    {
+      "path": "src/deskbot_server/web/blueprints/longshu_test_bp.py",
+      "sha256": "123e4ec0a39d520d3e67c802215c31acf165e9fa3706c1d9ebd4b802d0da1201"
+    },
+    {
+      "path": "src/deskbot_server/web/static/gateway_tts.js",
+      "sha256": "c61469d0b7d923ac38dd1c6e07164c4fad58a065fd83a40331319c8056d296d6"
+    },
+    {
+      "path": "src/deskbot_server/web/static/longshu_speech_tests.css",
+      "sha256": "5e2dc8e0504ab1e172f55fdcf69775af9068589094bac6a669f0ff9baa03e9a0"
+    },
+    {
+      "path": "src/deskbot_server/web/static/longshu_speech_tests.js",
+      "sha256": "7e08b4402e240a9e31abc43fd52dd64bae9704be9ce3dc2fe873a0d43c2b6b6f"
+    },
+    {
+      "path": "src/deskbot_server/web/templates/app2c/_gateway_tts.html",
+      "sha256": "50a62ca29d7c3074f0b4988d1ec65465a5e6f36a4410d0d0052da4dc514a0c7c"
+    },
+    {
+      "path": "src/deskbot_server/web/templates/app2c/_speech_tests.html",
+      "sha256": "1da4f7a808cc99bfb3fb140703168e963f075c75275ff52824b083a2b26e4106"
+    },
+    {
+      "path": "src/deskbot_server/web/templates/app2c/advanced.html",
+      "sha256": "10a31694d83933e4f7bf6724c37a75043ff22d80c12f595581446b807e267c05"
+    },
+    {
+      "path": "src/deskbot_server/web/templates/app2c/home.html",
+      "sha256": "7f025fce430b03a5ee705589826f045418f4378184b601f8f79f81323e6f85b0"
+    },
+    {
+      "path": "src/deskbot_server/web/templates/base_2c.html",
+      "sha256": "28b1bbe70e12a54743ba91b4cc343918c56daa17944398053c0107161df62f7e"
+    },
+    {
+      "path": "src/deskbot_server/ws/http_api.py",
+      "sha256": "bff450e539581f469c90685f4ba6ab4110a2be0aa1fa4cb0d7998dca64933278"
+    },
+    {
+      "path": "tools/apply_r6_update.py",
+      "sha256": "3a9f83db9adf1d92e37ae1e40bccd458ff1504f77ef1b74a2eac6edc46c33d79"
+    },
+    {
+      "path": "tools/check_speech.py",
+      "sha256": "d06e03fb53a79353e56a397434985b96c78f4615d769a482c49fee375c7a7d09"
+    },
+    {
+      "path": "tools/run_local_windows.ps1",
+      "sha256": "3aa07f60aba2d754ddc01afbff2a2f72554ffe9d72c1457120e08c0f1788d2e1"
+    }
+  ]
+}

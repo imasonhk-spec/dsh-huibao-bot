@@ -1,0 +1,32 @@
+{
+  "name": "dsh-huibao-bot",
+  "unit": "dsh-huibao-bot",
+  "version": "0.3.0",
+  "previousVersion": "0.2.0",
+  "title": "汇报助手（惠Bot / 小歪）",
+  "kind": "plugin",
+  "services": [
+    "huibao-core",
+    "huibao-web",
+    "redis-zhihui",
+    "zhihui-sso",
+    "dsh-docs-engine",
+    "dsh-ollama-shim"
+  ],
+  "ports": [
+    9000,
+    5050
+  ],
+  "pluginDir": "@local/huibao-bot",
+  "hasVenv": true,
+  "hasNode": false,
+  "hasHarness": false,
+  "generatedAt": "2026-11-01T22:39:41+08:00",
+  "host": "lgsj",
+  "installScope": [
+    "host-profile",
+    "all-existing-accounts"
+  ],
+  "baseRepo": "imasonhk-spec/dsh",
+  "baseTag": "v0.2.0"
+}

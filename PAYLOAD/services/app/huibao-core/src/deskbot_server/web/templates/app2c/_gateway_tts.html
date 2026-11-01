@@ -1,0 +1,29 @@
+<section class="model-card secondary-model-card gateway-tts">
+  <div class="model-card-head">
+    <div><span class="model-step">龙数语音 · TTS</span><h2>语音合成</h2>
+      <p>默认语音预设在启动时自动加载，无需再次保存。只需配置 LLM，即可开始测试；修改下方参数后才需要保存。</p></div>
+    <span class="model-status" :class="{ok:tts.configured}">[[ tts.configured ? '已配置 · 可直接测试' : '配置待完善' ]]</span>
+  </div>
+  <div class="longshu-voice-grid" aria-label="声音选择">
+    <button type="button" v-for="preset in tts.voice_presets" :key="preset.model"
+      :class="['voice-chip',{selected:tts.model===preset.model&&tts.speaker===preset.speaker}]"
+      :aria-pressed="tts.model===preset.model&&tts.speaker===preset.speaker"
+      @click="selectTtsPreset(preset)">[[ preset.label ]]<small>选择后保存，下一轮生效</small></button>
+  </div>
+  <form class="llm-form model-core-form" @submit.prevent="saveTtsConfig">
+    <label class="model-field"><span>Speech endpoint</span><input class="tinput" v-model.trim="tts.endpoint" type="url" required></label>
+    <label class="model-field"><span>模型</span><input class="tinput" v-model.trim="tts.model" required></label>
+    <label class="model-field"><span>TTS API Key</span><input class="tinput" type="password" autocomplete="new-password" v-model.trim="tts.api_key" :placeholder="tts.api_key_masked || '填写密钥，仅保存到本机'"></label>
+    <label class="model-field"><span>默认音色</span><select class="tinput" v-model="tts.speaker"><option v-for="voice in tts.voices" :key="voice" :value="voice">[[ ttsVoiceLabel(voice) ]]</option></select></label>
+    <label class="model-field"><span>请求超时（秒）</span><input class="tinput" v-model.number="tts.timeout_seconds" type="number" min="1" max="600" required></label>
+    <div class="model-form-actions"><button class="btn primary" :disabled="tts.saving||tts.testing">[[ tts.saving ? '保存中…' : '保存声音配置' ]]</button></div>
+  </form>
+  <div class="longshu-voice-grid" aria-label="当前模型音色">
+    <button type="button" v-for="voice in tts.voices" :key="voice" :class="['voice-chip',{selected:tts.speaker===voice}]" :aria-pressed="tts.speaker===voice" @click="tts.speaker=voice">[[ ttsVoiceLabel(voice) ]]<small>[[ tts.speaker===voice ? '已选择 · 保存后生效' : '点击选择' ]]</small></button>
+  </div>
+  <label class="model-field"><span>试听文本</span><textarea class="tinput" v-model="tts.testText" maxlength="300" rows="2"></textarea></label>
+  <button type="button" class="btn ghost" @click="testGatewayTts" :disabled="tts.testing||tts.saving">[[ tts.testing ? '合成中，请稍候…' : '试听已保存配置' ]]</button>
+  <audio v-if="tts.audioUrl" :src="tts.audioUrl" controls class="debug-audio"></audio>
+  <div class="debug-output" role="status" v-if="tts.result"><b>[[ tts.result.ok ? tts.result.message : tts.result.error ]]</b></div>
+  <small class="setup-hint">试听使用已保存的声音，不会修改配置。密钥留空保留原值；切换声音后保存，下一轮回复生效。已配置不代表连通性已实测。</small>
+</section>

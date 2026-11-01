@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+
+from deskbot_server import rtc_llm_adapter as adapter
+
+
+def test_responses_base_url_normalizes_chat_and_responses_suffixes():
+    assert (
+        adapter.responses_base_url("https://ark.cn-beijing.volces.com/api/v3/chat/completions")
+        == "https://ark.cn-beijing.volces.com/api/v3"
+    )
+    assert (
+        adapter.responses_base_url("https://ark.cn-beijing.volces.com/api/v3/responses/")
+        == "https://ark.cn-beijing.volces.com/api/v3"
+    )
+    assert (
+        adapter.responses_base_url("https://ark.cn-beijing.volces.com/api/v3")
+        == "https://ark.cn-beijing.volces.com/api/v3"
+    )
+
+
+def test_web_search_enabled_only_for_ark_and_not_when_disabled(monkeypatch):
+    monkeypatch.delenv("DESKBOT_RTC_WEB_SEARCH", raising=False)
+    assert adapter.web_search_enabled_for("https://ark.cn-beijing.volces.com/api/v3")
+    assert not adapter.web_search_enabled_for("https://api.xiaomimimo.com/v1")
+    assert not adapter.web_search_enabled_for("")
+    monkeypatch.setenv("DESKBOT_RTC_WEB_SEARCH", "0")
+    assert not adapter.web_search_enabled_for("https://ark.cn-beijing.volces.com/api/v3")
+
+
+def test_ark_web_search_provider_tool_serializes_plugin_params():
+    pytest.importorskip("livekit.plugins.openai")
+    from livekit.agents import ProviderTool
+
+    tool = adapter.build_ark_web_search_tool()
+    assert isinstance(tool, ProviderTool)
+    assert tool.id == "ark_web_search"
+    body = tool.to_dict()
+    assert body["type"] == "web_search"
+    assert 1 <= body["max_keyword"] <= 10
+    assert body["limit"] >= 1
+
+
+def _fake_lampgo(*, provider_type="openai", base_url="https://ark.cn-beijing.volces.com/api/v3"):
+    provider = SimpleNamespace(
+        type=provider_type,
+        get_extra=lambda key: {"api_key": "sk-test", "base_url": base_url}.get(key),
+    )
+    component = SimpleNamespace(
+        options={"model": "doubao-x", "temperature": 0.3, "max_tokens": 160}
+    )
+    config = SimpleNamespace(provider_for=lambda component, path: provider)
+    runtime = SimpleNamespace(voice_agent=SimpleNamespace(name="deskbot", llm=component))
+    return config, runtime
+
+
+def test_params_from_lampgo_mirrors_create_llm_options():
+    pytest.importorskip("lampgo_livekit_agent")
+    config, runtime = _fake_lampgo()
+    params = adapter.params_from_lampgo(config, runtime)
+    assert params == adapter.ArkLlmParams(
+        model="doubao-x",
+        api_key="sk-test",
+        base_url="https://ark.cn-beijing.volces.com/api/v3",
+        temperature=0.3,
+        max_output_tokens=160,
+    )
+    config, runtime = _fake_lampgo(provider_type="volcengine")
+    assert adapter.params_from_lampgo(config, runtime) is None
+
+
+def test_install_patches_both_aliases_and_uses_normalized_chat_fallback(monkeypatch):
+    lampgo_llm = pytest.importorskip("lampgo_livekit_agent.llm")
+    lampgo_worker = pytest.importorskip("lampgo_livekit_agent.worker")
+
+    calls: list[str] = []
+    monkeypatch.setattr(lampgo_llm, "create_llm", lambda *, config, runtime: calls.append("orig") or "ORIG")
+    monkeypatch.setattr(lampgo_worker, "create_llm", lampgo_llm.create_llm)
+    monkeypatch.setattr(adapter, "_installed", False)
+    monkeypatch.setattr(adapter, "build_chat_completions_llm", lambda **kw: calls.append("chat") or "CHAT")
+    monkeypatch.delenv(adapter.ACTIVE_ENV, raising=False)
+
+    assert adapter.install_lampgo_llm_adapter() is True
+    assert lampgo_worker.create_llm is lampgo_llm.create_llm
+
+    # 非方舟网关：使用地址归一后的 Chat Completions 工厂。
+    config, runtime = _fake_lampgo(base_url="https://api.xiaomimimo.com/v1")
+    assert lampgo_llm.create_llm(config=config, runtime=runtime) == "CHAT"
+    assert calls == ["chat"]
+    assert not adapter.ark_web_search_active()
+
+    # 方舟网关：构造 Responses LLM 并标记激活。
+    built: list[adapter.ArkLlmParams] = []
+    monkeypatch.setattr(adapter, "build_ark_responses_llm", lambda p: built.append(p) or "ARK")
+    config, runtime = _fake_lampgo()
+    assert lampgo_llm.create_llm(config=config, runtime=runtime) == "ARK"
+    assert built and built[0].model == "doubao-x"
+    assert adapter.ark_web_search_active()
+
+    # 构造失败必须退回原链路，不能让语音会话起不来。
+    monkeypatch.setattr(
+        adapter, "build_ark_responses_llm", lambda p: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    assert lampgo_llm.create_llm(config=config, runtime=runtime) == "CHAT"
+    assert not adapter.ark_web_search_active()
+
+    config, runtime = _fake_lampgo(provider_type="unsupported")
+    assert lampgo_llm.create_llm(config=config, runtime=runtime) == "ORIG"
+
+
+def test_deskbot_tools_swap_core_websearch_for_builtin_when_active(monkeypatch):
+    pytest.importorskip("livekit.agents")
+    from deskbot_server.rtc_worker_tools import build_livekit_deskbot_tools
+
+    monkeypatch.delenv(adapter.ACTIVE_ENV, raising=False)
+    names = {getattr(t, "id", "") or getattr(t, "name", "") for t in build_livekit_deskbot_tools()}
+    assert "ark_web_search" not in names
+
+    monkeypatch.setenv(adapter.ACTIVE_ENV, "1")
+    tools = build_livekit_deskbot_tools()
+    ids = [getattr(t, "id", "") for t in tools]
+    assert "ark_web_search" in ids
+    fn_names = {
+        getattr(getattr(t, "info", None), "name", "") for t in tools if hasattr(t, "info")
+    }
+    assert "websearch" not in fn_names
+    assert "webfetch" in fn_names
+
+
+def test_ark_responses_llm_disables_thinking_and_server_state(monkeypatch):
+    pytest.importorskip("livekit.plugins.openai")
+    import asyncio
+
+    from livekit.agents.llm import ChatContext
+    from livekit.plugins.openai.responses import llm as responses_llm
+
+    # chat() 会为流创建任务并立即发请求；这里只验证请求参数，不真的联网。
+    async def _no_network(self):
+        self._response_completed = True
+
+    monkeypatch.setattr(responses_llm.LLMStream, "_run_impl", _no_network)
+
+    llm = adapter.build_ark_responses_llm(
+        adapter.ArkLlmParams(
+            model="doubao-x",
+            api_key="sk-test",
+            base_url="https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+            temperature=0.3,
+            max_output_tokens=160,
+        )
+    )
+    assert llm._opts.use_websocket is False
+    assert llm._opts.store is False
+    assert llm.provider == "ark.cn-beijing.volces.com"
+
+    async def _capture() -> dict:
+        ctx = ChatContext()
+        ctx.add_message(role="user", content="hi")
+        stream = llm.chat(chat_ctx=ctx, tools=[])
+        try:
+            return dict(stream._extra_kwargs)
+        finally:
+            await stream.aclose()
+            await llm.aclose()
+
+    extra = asyncio.run(_capture())
+    assert extra["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert extra["store"] is False
+    assert extra["max_output_tokens"] == 160
+
+
+def test_non_ark_chat_llm_gets_thinking_disabled(monkeypatch):
+    """DeepSeek 等混合思考模型：思考模式下拒绝 tool_choice=required（2026-09-14 实测 400），
+    非方舟链路也要像 Core 一样带 thinking: disabled；其它参数原样透传，已有 extra_body 只补不盖。"""
+    import lampgo_livekit_agent.llm as lampgo_llm
+    import lampgo_livekit_agent.worker as lampgo_worker
+
+    from deskbot_server import rtc_llm_adapter as adapter
+
+    class _FakeLLM:
+        def __init__(self):
+            self.calls = []
+
+        def chat(self, **kwargs):
+            self.calls.append(kwargs)
+            return "STREAM"
+
+    fake = _FakeLLM()
+    import livekit.plugins.openai as openai_plugin
+    monkeypatch.setattr(openai_plugin, "LLM", lambda **kwargs: fake)
+    monkeypatch.setattr(lampgo_llm, "create_llm", lambda *, config, runtime: fake)
+    monkeypatch.setattr(lampgo_worker, "create_llm", lampgo_llm.create_llm)
+    monkeypatch.setattr(adapter, "_installed", False)
+    assert adapter.install_lampgo_llm_adapter() is True
+    config, runtime = _fake_lampgo(base_url="https://api.deepseek.com")
+    llm = lampgo_llm.create_llm(config=config, runtime=runtime)
+    assert llm is fake
+    assert llm.chat(chat_ctx="ctx", tool_choice="required") == "STREAM"
+    assert fake.calls[-1] == {
+        "chat_ctx": "ctx", "tool_choice": "required",
+        "extra_kwargs": {"extra_body": {"thinking": {"type": "disabled"}}},
+    }
+    llm.chat(chat_ctx="ctx", extra_kwargs={"extra_body": {"thinking": {"type": "enabled"}, "x": 1}, "timeout": 3})
+    assert fake.calls[-1]["extra_kwargs"] == {"extra_body": {"thinking": {"type": "enabled"}, "x": 1}, "timeout": 3}
+
+
+@pytest.mark.parametrize("suffix", ["", "/", "/chat/completions", "/chat/completions/"])
+def test_rtc_factory_streams_to_one_chat_completions_path(monkeypatch, suffix):
+    """Exercise the real SDK HTTP stream, catching duplicated endpoint paths (404)."""
+    import asyncio
+    import json
+    import httpx
+    from livekit.agents.llm import ChatContext
+    import lampgo_livekit_agent.llm as lampgo_llm
+    import lampgo_livekit_agent.worker as lampgo_worker
+
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        chunk = {"id": "test", "object": "chat.completion.chunk", "created": 1,
+                 "model": "doubao-x", "choices": [{"index": 0,
+                 "delta": {"role": "assistant", "content": "你好"}, "finish_reason": None}]}
+        return httpx.Response(200, headers={"content-type": "text/event-stream"},
+                              text="data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n")
+
+    class MockClient(httpx.AsyncClient):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs, transport=httpx.MockTransport(respond))
+
+    monkeypatch.setattr(httpx, "AsyncClient", MockClient)
+    # Restore both factory aliases after the test.
+    monkeypatch.setattr(lampgo_llm, "create_llm", lampgo_llm.create_llm)
+    monkeypatch.setattr(lampgo_worker, "create_llm", lampgo_worker.create_llm)
+    monkeypatch.setattr(adapter, "_installed", False)
+    monkeypatch.delenv(adapter.ACTIVE_ENV, raising=False)
+    adapter.install_lampgo_llm_adapter()
+    config, runtime = _fake_lampgo(base_url="https://gateway.example/v1" + suffix)
+    runtime.voice_agent.llm.options["extra_body"] = {"thinking": {"type": "disabled"}, "custom": True}
+
+    async def run():
+        llm = lampgo_worker.create_llm(config=config, runtime=runtime)
+        ctx = ChatContext()
+        ctx.add_message(role="user", content="你好")
+        try:
+            async with llm.chat(chat_ctx=ctx) as stream:
+                return "".join([chunk.delta.content or "" async for chunk in stream if chunk.delta])
+        finally:
+            await llm.aclose()
+
+    assert asyncio.run(run()) == "你好"
+    assert len(requests) == 1
+    assert str(requests[0].url) == "https://gateway.example/v1/chat/completions"
+    body = json.loads(requests[0].content)
+    assert body["stream"] is True
+    assert body["max_completion_tokens"] == 160
+    assert body["thinking"] == {"type": "disabled"} and body["custom"] is True
+    assert runtime.voice_agent.llm.options["max_tokens"] == 160  # no config mutation

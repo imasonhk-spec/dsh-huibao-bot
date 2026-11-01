@@ -1,0 +1,36 @@
+{% extends 'base_2c.html' %}
+{% block page_title %}查询等待场景 · 惠bot{% endblock %}
+{% block extra_head %}<script src="{{ url_for('static',filename='vendor/vue.global.prod.min.js') }}"></script>{% endblock %}
+{% block content %}
+<div id="query-scenes">
+  <h1>查询等待场景</h1>
+  <p>导入后先逐场试听，再启用。试听仅播放示例，不查询资料或更改主音色。</p>
+  <label class="btn ghost">选择场景包 <input type="file" accept=".zip" @change="file=$event.target.files[0]"></label>
+  <button class="btn primary" :disabled="busy||!file" @click="importPackage">导入ZIP</button>
+  <p role="status">[[ message ]]</p>
+  <section v-for="p in packages" :key="p.packageId+'@'+p.version" class="agent-doc-panel">
+    <h2>[[ p.packageId ]] · [[ p.version ]]</h2>
+    <p>[[ p.enabled?'已启用':'未启用' ]] · 已确认试听 [[ p.listened.length ]]/[[ p.scenes.length ]]</p>
+    <button class="btn primary" :disabled="busy" @click="update(p,'enable',{enabled:!p.enabled})">[[ p.enabled?'停用':'启用此版本' ]]</button>
+    <button class="btn ghost" :disabled="busy||p.enabled" @click="update(p,'delete',{})">删除未使用版本</button>
+    <div v-for="kind in ['document','light']" :key="kind">
+      <h3>[[ kind==='document'?'文档大场景':'通用小场景' ]]</h3>
+      <div v-for="s in p.scenes.filter(s=>s.kind===kind)" :key="s.id" style="padding:12px 0;border-bottom:1px solid #ddd">
+        <b>[[ s.id ]] [[ s.title ]]</b> · [[ s.durationSec ]] 秒 · [[ p.listened.includes(s.id)?'已确认试听':'待试听' ]]<br>
+        <audio controls preload="none" :src="auditionUrl(p,s)" @play="stopOther($event)" @ended="heard[p.packageId+'@'+p.version+':'+s.id]=true"></audio>
+        <button class="btn ghost" :disabled="busy||!heard[p.packageId+'@'+p.version+':'+s.id]" @click="update(p,'listened',{sceneId:s.id})">确认本场音色与停顿</button>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+Vue.createApp({delimiters:['[[',']]'],data(){return{packages:[],file:null,busy:false,message:'',heard:{}}},methods:{
+  async api(action='',options){return window.DeskbotConsole.apiJson('/api/query_wait_scenes'+(action?'/'+action:''),options)},
+  async refresh(){try{this.packages=(await this.api()).packages||[]}catch(e){this.message=e.message}},
+  auditionUrl(p,s){return '/api/query_wait_scenes/audition'+'?'+new URLSearchParams({packageId:p.packageId,version:p.version,sceneId:s.id})},
+  stopOther(event){document.querySelectorAll('audio').forEach(a=>{if(a!==event.target)a.pause()})},
+  async importPackage(){this.busy=true;try{const data=new FormData();data.append('package',this.file);await this.api('import',{method:'POST',body:data});this.message='导入完成，尚未启用。';await this.refresh()}catch(e){this.message=e.message}finally{this.busy=false}},
+  async update(p,action,fields){this.busy=true;try{await this.api(action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packageId:p.packageId,version:p.version,...fields})});this.message='已保存';await this.refresh()}catch(e){this.message=e.message}finally{this.busy=false}}
+},mounted(){this.refresh()}}).mount('#query-scenes');
+</script>
+{% endblock %}

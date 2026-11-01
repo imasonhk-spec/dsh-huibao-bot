@@ -1,0 +1,21 @@
+[Unit]
+Description=小歪 R6 Web 控制台 (waitress :5050) - 供 DSH /xw/ 同源反代 / 汇报助手面板
+Documentation=file:///home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/docs/ARCHITECTURE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lgsj
+Group=lgsj
+WorkingDirectory=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service
+EnvironmentFile=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/.venv/bin/python -m deskbot_server.web
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/runtime_logs/huibao_web.log
+StandardError=append:/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/runtime_logs/huibao_web.log
+
+[Install]
+WantedBy=multi-user.target

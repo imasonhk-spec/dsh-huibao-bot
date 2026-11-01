@@ -1,0 +1,17 @@
+[Unit]
+Description=Zhihui SSO bridge (DSH dsh_mu_user -> zh_session, port 3220)
+After=network.target postgresql@16-zhihui.service
+Wants=postgresql@16-zhihui.service
+
+[Service]
+Type=simple
+User=lgsj
+Group=lgsj
+WorkingDirectory=/opt/zhihui/runtime
+EnvironmentFile=/opt/zhihui/env/sso.env
+ExecStart=/home/lgsj/.nvm/versions/node/v22.23.3/bin/node /opt/zhihui/runtime/sso-server.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
