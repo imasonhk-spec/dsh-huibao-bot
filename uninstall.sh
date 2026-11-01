@@ -5,7 +5,7 @@ set -euo pipefail
 PKG_NAME="dsh-huibao-bot"
 PKG_VERSION="0.3.0"
 PLUGIN_DIR="@local/huibao-bot"
-SERVICES="huibao-core huibao-web redis-zhihui zhihui-sso dsh-docs-engine dsh-ollama-shim"
+SERVICES="huibao-core huibao-web dsh-ollama-shim"
 
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 PROFILE_DIR="$DSH_HOME/profiles/web"
