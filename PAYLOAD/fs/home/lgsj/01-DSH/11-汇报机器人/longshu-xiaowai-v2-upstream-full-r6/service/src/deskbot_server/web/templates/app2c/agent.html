@@ -1,0 +1,289 @@
+{% extends "base_2c.html" %}
+{% block page_title %}Agent对话 · 惠bot{% endblock %}
+{% block extra_head %}<script src="{{ url_for('static', filename='vendor/vue.global.prod.min.js') }}"></script>{% endblock %}
+{% block content %}
+<div id="app" class="agent-page">
+  <div class="agent-workspace" :class="{'tools-open':toolsOpen}">
+    <main class="agent-main" aria-label="惠bot对话">
+      <header class="agent-head">
+        <h1>Agent对话</h1>
+        <button ref="toolsToggle" class="btn ghost" type="button" @click="toggleTools"
+                aria-controls="agent-tools" :aria-expanded="toolsOpen">[[ toolsOpen?'收起工具栏':'展开工具栏' ]]</button>
+      </header>
+      <div class="agent-recording-status" v-if="meetingActive" role="status">
+        <span>[[ meeting.recordingState==='preparing'?'等待录音音频':'正在录音' ]] · [[ Math.floor(meeting.durationSeconds||0) ]]秒</span>
+        <button class="btn ghost" :disabled="meetingBusy" @click="meetingCommand('停止录音')">停止本场录音</button>
+      </div>
+  <div class="agent-chat" ref="scroller" aria-label="聊天记录">
+  <button class="btn ghost" v-if="hasMore && !legacy" @click="older">更早的对话</button>
+
+    <div v-if="!turns.length" class="ui-state">
+      <b>还没有对话</b>
+      <p>在下面说点什么，这里和语音走同一个大脑。</p>
+    </div>
+    <div class="agent-turn" v-for="(t,i) in turns" :key="i" :class="t.role">
+      <small>[[ t.role==='assistant' ? ({huibao:'惠宝',akun:'阿昆'}[t.personaId]||'惠bot') : '用户' ]]</small>
+      <div class="agent-bubble">[[ t.text ]]</div>
+      <small v-for="(source,j) in (t.sources||[])" :key="j">来源：<a v-if="source.url" :href="source.url" target="_blank" rel="noopener">[[ source.title||source.file_path||source.doc_id ]]</a><span v-else>[[ source.title||source.file_path||source.doc_id||source.meetingId ]]</span></small>
+    </div>
+    <div class="agent-turn assistant" v-if="pending">
+      <div class="agent-bubble thinking">[[ approvalWaiting ? '等待您在DSH原会话审批' : '正在想…' ]]</div>
+    </div>
+  </div>
+
+
+  <form class="agent-input" @submit.prevent="send">
+    <textarea class="tinput" v-model="draft" :disabled="legacy" rows="2" maxlength="2000"
+              placeholder="和它说点什么…（Enter 发送，Shift+Enter 换行）"
+              @keydown.enter.exact="onEnter"></textarea>
+    <button class="btn primary" type="submit" :disabled="legacy || pending || !draft.trim()">
+      [[ pending ? '发送中…' : '发送' ]]
+    </button>
+  </form>
+  <button v-if="approvalWaiting" class="btn ghost agent-inline-notice" type="button" @click="openApproval">请求需要审批 · 到DSH原会话确认</button>
+  <button v-if="error" class="btn ghost agent-inline-notice" type="button" @click="toolsOpen=true">查看会话状态提示</button>
+    </main>
+    <aside id="agent-tools" class="agent-tools" v-show="toolsOpen" aria-label="会话与会议工具" @keydown.esc="toolsOpen=false; $refs.toolsToggle.focus()">
+      <h2>工具栏</h2>
+      <p v-if="error" class="agent-error" role="alert">[[ error ]]</p>
+  <label>主角色 <select v-model="mainVoice" aria-label="主角色"><option value="current">使用当前音色设置</option><option value="huibao">惠宝（女声）</option><option value="akun">阿昆（男声）</option></select></label>
+    <div class="agent-docs">
+      <button type="button" class="btn ghost" v-for="d in docs" :key="d.name"
+              :class="{primary: openDoc===d.name}" @click="toggleDoc(d)">
+        [[ d.name ]]
+      </button>
+      <a class="btn ghost" href="{{ url_for('app2c.memories') }}">更多功能</a>
+    </div>
+  <div class="agent-doc-panel" v-if="openDoc">
+    <div class="agent-doc-bar">
+      <b>[[ openDoc ]]</b>
+      <small>[[ docLabel ]]</small>
+      <span class="grow"></span>
+      <button class="btn primary" :disabled="docSaving" @click="saveDoc">
+        [[ docSaving ? '保存中…' : '保存' ]]
+      </button>
+      <button class="btn ghost" @click="openDoc=''">关闭</button>
+    </div>
+    <textarea class="tinput agent-doc-text" v-model="docText"
+              spellcheck="false" aria-label="编辑文档"></textarea>
+    <small v-if="docMsg" class="agent-doc-msg">[[ docMsg ]]</small>
+  </div>
+
+  <div class="agent-abilities" v-if="abilities.length">
+    <div class="agent-abilities-hd"><span>ABILITIES</span><b>它会做的事</b><small>同一个 Agent 的四项能力</small></div>
+    <a class="agent-ability" v-for="a in abilities" :key="a.key" :href="a.href">
+      <b>[[ a.label ]]</b><span>[[ a.text ]]</span><em>去看看 →</em>
+    </a>
+  </div>
+
+  <div class="agent-docs">
+    <select aria-label="DSH会话" v-model="selectedId" @change="selectSession">
+      <option v-for="s in sessions" :value="s.sessionId">[[ s.sessionId ]]</option>
+    </select>
+    <button class="btn ghost" @click="newSession">新建会话</button>
+    <a class="btn ghost" href="{{ url_for('app2c.sessions') }}">旧语音聊天记录</a>
+    <button class="btn ghost" @click="oldHistory">旧汇报聊天记录</button>
+    <button class="btn ghost" v-if="approval" @click="openApproval">到DSH原会话审批</button>
+    <small v-if="approval">[[ approval ]]</small>
+  </div>
+  <button class="btn ghost" v-if="legacy" @click="loadHistory">返回当前会话</button>
+  <section class="agent-doc-panel" id="meeting" aria-label="机器人会议模式">
+    <h2>机器人会议模式</h2>
+    <p>[[ meeting.recordingState==='recording'?'正在录音':meeting.recordingState==='preparing'?'等待音频':meeting.recordingState==='interrupted'?'录音中断':'当前未录音' ]] · [[ Math.floor(meeting.durationSeconds||0) ]] 秒 · [[ meeting.saveState||'' ]]</p>
+    <button class="btn primary" :disabled="meetingBusy" @click="meetingCommand(meetingActive?'停止录音':'开始录音')">[[ meetingActive?'停止本场录音':'开始机器人录音' ]]</button>
+    <button class="btn ghost" :disabled="meetingBusy||meetingActive||!meeting.sessionId" @click="meetingCommand('生成会议纪要')">生成本场纪要</button>
+    <p v-if="meeting.pending">[[ meeting.lastReply ]]</p>
+    <template v-if="meeting.pending">
+      <input class="tinput" v-model="meetingAnswer" aria-label="会议名称或选择序号" v-if="['name','choose'].includes(meeting.pending.kind)">
+      <div v-for="(m,i) in (meeting.pending.hits||[])" :key="m.id">[[ i+1 ]]. [[ m.title ]] [[ m.start_time ]]</div>
+      <button class="btn ghost" :disabled="meetingBusy" @click="meetingCommand(meetingAnswer||'确认')">[[ meetingAnswer?'提交':'确认' ]]</button>
+      <button class="btn ghost" :disabled="meetingBusy" @click="meetingCommand('取消')">取消</button>
+    </template>
+    <p role="status">[[ meetingReply ]]</p>
+    <p>生成状态：[[ meeting.generationState||'未开始' ]]</p>
+    <a v-if="meeting.meetingId" :href="'/?huibaoMeeting='+encodeURIComponent(meeting.meetingId)" target="_top">查看共享会议记录、纪要与Word</a>
+    <p v-if="meeting.captionState && meeting.captionState!=='ready'">字幕暂不可用，音频独立保存。</p>
+    <div class="agent-captions" aria-live="polite">
+      <div v-for="(c,i) in (meeting.captions||[])" :key="c.utteranceId||i" class="agent-bubble">[[ c.speaker||'发言' ]]：[[ c.text ]]</div>
+    </div>
+  </section>
+
+    </aside>
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+  delimiters:['[[',']]'],
+  data(){ return {
+    toolsOpen:true,mainVoice:'current',turns:[], draft:'', pending:false, error:'', sessionId:null, bindingRevision:0, legacy:false, hasMore:false, selectedId:'', sessions:[], approval:'', approvalWaiting:false, cursor:null, beforeSeq:null,
+    docs:[], openDoc:'', docText:'', docLabel:'', docSaving:false, docMsg:'',
+    abilities:[], meeting:{},meetingBusy:false,meetingReply:'',meetingAnswer:'',meetingActive:false,
+  }; },
+  methods:{
+    toggleTools(){
+      this.toolsOpen=!this.toolsOpen;
+      if(!this.toolsOpen)this.$nextTick(()=>this.$refs.toolsToggle.focus());
+    },
+    async api(path, opts){
+      return window.DeskbotConsole.apiJson(path, opts);
+    },
+    async refreshMeeting(){
+      if(this._meetingPolling)return;this._meetingPolling=true;
+      try{const row=await this.api('/app/api/dsh/meeting');if(row.ownerEntry&&row.ownerEntry!=='huibao')throw Error('录音归属不匹配');this.meeting=row;this.meetingActive=['preparing','recording'].includes(row.recordingState);}
+      catch(e){this.meetingReply='会议状态暂不可用；原任务保留，请按原ID核对。';}
+      finally{this._meetingPolling=false;}
+    },
+    async meetingCommand(text){
+      if(this.meetingBusy)return;this.meetingBusy=true;const requestId=crypto.randomUUID();
+      try{const row=await this.api('/app/api/dsh/meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'惠宝，'+text,requestId,sessionId:this.meeting.sessionId})});this.meeting=row;this.meetingReply=row.reply||'';this.meetingAnswer='';this.meetingActive=['preparing','recording'].includes(row.recordingState);}
+      catch(e){this.meetingReply='操作结果尚未确认，不要重复提交。原请求：'+requestId;}
+      finally{this.meetingBusy=false;}
+    },
+    async loadAbilities(){
+      const rows=[];
+      const safe=async (fn)=>{ try{ return await fn(); }catch(_e){ return null; } };
+      const q=await safe(()=>this.api('/api/quest/overview'));
+      if(q && q.ok){
+        const running=(q.tasks||[]).filter(t=>t.status==='running').map(t=>t.title);
+        const pa=q.proactive||{};
+        rows.push({key:'quest',label:'主动陪伴',href:'{{ url_for("quest.page") }}',
+          text: !q.enabled ? '已关' : (running.length ? `正在做「${running[0]}」，今天开口 ${pa.today_count||0}${q.settings&&q.settings.daily_limit?'/'+q.settings.daily_limit:''} 次` : (q.playbook ? `场景「${q.playbook.title}」暂无进行中的小目标` : '还没选场景'))});
+      }
+      const sc=await safe(()=>this.api('/proxy/deskbot/api/scene_playbooks'));
+      if(sc && sc.ok){
+        const list=Array.isArray(sc.config)?sc.config:(sc.playbooks||[]);
+        rows.push({key:'scenes',label:'表演',href:'{{ url_for("app2c.playbooks") }}',
+          text: list.length ? `${list.length} 段：${list.slice(0,3).map(p=>p.title||p.name).join('、')}${list.length>3?'…':''}` : '还没有表演'});
+      }
+      if(q && q.ok){
+        // 定时提醒 = 主动陪伴里带钟点的那些（2026-09-14 起定时任务并进来了）
+        const timed=(q.care_tasks||[]).filter(t=>t && t.schedule_time && !t.done_at);
+        rows.push({key:'reminders',label:'定时提醒',href:'{{ url_for("quest.page") }}', text: timed.length ? `${timed.length} 条：${timed.slice(0,3).map(t=>t.title).join('、')}${timed.length>3?'…':''}` : '还没有定时提醒'});
+      }
+      const mi=await safe(()=>this.api('/app/api/miot/status'));
+      if(mi && mi.ok){
+        rows.push({key:'miot',label:'米家',href:'{{ url_for("app2c.miot") }}', text: mi.device_count ? `已连 ${mi.device_count} 个设备` : '还没连接米家'});
+      }
+      this.abilities=rows;
+    },
+    async loadDocs(){
+      try{
+        const r = await this.api('/app/api/agent/docs');
+        this.docs = r.docs || [];
+      }catch(e){ /* 文档列表拿不到不影响对话 */ }
+    },
+    sessionPath(suffix=''){
+      return '/app/api/dsh/sessions'+suffix;
+    },
+    async sessionApi(suffix,body){
+      return this.api(this.sessionPath(suffix),body===undefined?undefined:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    },
+    async loadHistory(){
+      try{
+        let binding=await this.sessionApi('/current');
+        if(!binding.sessionId) binding=await this.sessionApi('/new',{requestId:'first:admin'});
+        this.legacy=false;this.sessionId=binding.sessionId;this.selectedId=binding.sessionId;this.bindingRevision=binding.bindingRevision;
+        const list=await this.sessionApi('');this.sessions=list.items||[];
+        this.subscribe();
+      }catch(e){this.error='DSH会话未就绪：'+e.message;}
+    },
+    async older(){
+      if(!this.hasMore||!Number.isSafeInteger(this.beforeSeq))return;const sid=this.sessionId;
+      try{const page=await this.sessionApi('/'+encodeURIComponent(sid)+'/history?throughSeq='+this.cursor+'&beforeSeq='+this.beforeSeq);if(sid===this.sessionId){this.turns=[...(page.messages||[]),...this.turns];this.hasMore=!!page.hasMore;this.beforeSeq=page.beforeSeq;}}catch(e){this.error=e.message;}
+    },
+    async newSession(){
+      const requestId=crypto.randomUUID();
+      try{await this.sessionApi('/new',{requestId});await this.loadHistory();}catch(e){this.error='新建结果尚未确认，请刷新按原ID核对：'+requestId;}
+    },
+    async selectSession(){
+      try{await this.sessionApi('/select',{sessionId:this.selectedId});this.pending=false;await this.loadHistory();}catch(e){this.error=e.message;}
+    },
+    consume(row,sid){
+      if(sid!==this.sessionId||row.sessionId!==sid)return;
+      if(row.kind==='snapshot'){this.turns=row.messages||[];this.cursor=row.cursor;this.beforeSeq=row.beforeSeq;this.hasMore=!!row.hasMore;this.pending=false;for(const recovered of row.recovered||[])if(recovered.kind!=='answer')this.consume(recovered,sid);}
+      if(row.kind==='answer'&&!row.snapshot){this.turns.push({role:'assistant',text:row.text,seq:row.seq,personaId:row.personaId||null,sources:row.sources||[]});}
+      if(row.kind==='approval'){this.approvalWaiting=row.status==='waiting';this.approval=this.approvalWaiting?'本请求正在等待DSH原页面审批':'审批结果：'+row.status;}
+      if(row.kind==='complete'||row.kind==='failed'){this.pending=false;this.approvalWaiting=false;if(row.kind==='failed')this.error='原请求结束：'+row.reason;else if(this.error.startsWith('原请求结束：'))this.error='';}
+      this.scrollDown();
+    },
+    async subscribe(){
+      this._subscription?.abort();const controller=new AbortController();this._subscription=controller;
+      const sid=this.sessionId;this.turns=[];this.approval='';this.approvalWaiting=false;
+      try{
+        const response=await fetch(this.sessionPath('/'+encodeURIComponent(sid)+'/events'),{signal:controller.signal,credentials:'same-origin'});
+        if(!response.ok)throw Error('HTTP '+response.status);
+        const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
+        while(true){const {value,done}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);if(line)this.consume(JSON.parse(line),sid);}}
+        if(!controller.signal.aborted&&sid===this.sessionId)this.error='连接已结束，原任务会继续；刷新查看原会话，不要重复发送。';
+      }catch(e){if(!controller.signal.aborted&&sid===this.sessionId)this.error='连接中断，原任务会继续；刷新查看原会话，不要重复发送。';}
+    },
+    openApproval(){
+      window.open('/?huibaoSession='+encodeURIComponent(this.sessionId),'_blank','noopener');
+    },
+    async oldHistory(){
+      try{const r=await this.sessionApi('/legacy');this.legacy=true;this.pending=false;this._subscription?.abort();this.turns=(r.items||[]).map(m=>({role:m.role,text:m.content}));this.error='正在查看旧记录；刷新可回到当前DSH会话。';}catch(e){this.error=e.message;}
+    },
+    async toggleDoc(d){
+      if(this.openDoc === d.name){ this.openDoc=''; return; }
+      this.openDoc = d.name; this.docText=''; this.docMsg=''; this.docLabel=d.label;
+      try{
+        const r = await this.api('/app/api/agent/docs/'+encodeURIComponent(d.name));
+        if(this.openDoc === d.name) this.docText = r.text || '';
+      }catch(e){
+        if(this.openDoc === d.name) this.docMsg = '读取失败：'+(e.message||'');
+      }
+    },
+    async saveDoc(){
+      if(!this.openDoc || this.docSaving) return;
+      this.docSaving = true; this.docMsg='';
+      try{
+        await this.api('/app/api/agent/docs/'+encodeURIComponent(this.openDoc), {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({text:this.docText}),
+        });
+        this.docMsg = '已保存';
+        this.loadDocs();
+      }catch(e){
+        this.docMsg = '保存失败：'+(e.message||'');
+      }finally{
+        this.docSaving = false;
+      }
+    },
+    scrollDown(){
+      this.$nextTick(()=>{
+        const el = this.$refs.scroller;
+        if(el) el.scrollTop = el.scrollHeight;
+      });
+    },
+    onEnter(e){
+      // 中文输入法里按回车是"上屏候选词"，此时 v-model 还停在已上屏的前半句（比如「中秋」），
+      // 直接发送就会把后半句丢掉（2026-09-14 实测）；组合结束后再按一次回车才发送。
+      if(e && (e.isComposing || e.keyCode === 229)) return;
+      if(e) e.preventDefault();
+      this.send();
+    },
+    async send(){
+      const text=this.draft.trim();if(this.legacy||!text||this.pending||!this.sessionId)return;
+      const sid=this.sessionId,requestId=crypto.randomUUID();this.draft='';this.pending=true;this.error='';this.turns.push({role:'user',text});
+      try{await this.sessionApi('/prompt',{text,sessionId:sid,bindingRevision:this.bindingRevision,requestId,mainVoice:this.mainVoice});}
+      catch(e){if(sid===this.sessionId){this.pending=false;this.error='发言结果尚未确认，请刷新按原请求核对，不要重复发送。请求：'+requestId;}}
+    },
+  },
+  mounted(){
+    let narrow=false;
+    this._toolsResize=new ResizeObserver(([entry])=>{
+      const next=entry.contentRect.width<840;
+      if(next&&!narrow)this.toolsOpen=false;
+      narrow=next;
+    });
+    this._toolsResize.observe(this.$el);
+    this.loadAbilities(); setInterval(()=>this.loadAbilities(), 30000);
+    this.loadDocs(); this.loadHistory();this.refreshMeeting();this._meetingTimer=setInterval(()=>this.refreshMeeting(),2000);
+
+  },
+  beforeUnmount(){ this._toolsResize?.disconnect();this._subscription?.abort();clearInterval(this._meetingTimer); },
+}).mount('#app');
+</script>
+{% endblock %}

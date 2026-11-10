@@ -1,0 +1,114 @@
+<section class="speech-lab" aria-label="ASR LLM TTS 独立测试">
+  <div class="speech-intro">
+    <div>
+      <span class="speech-eyebrow">龙数惠宝 · 语音测试台</span>
+      <h2>先检查惠宝收音，再测试对话</h2>
+      <p>直接使用电脑端已经生效的配置。预置 ASR、TTS 无需重新保存；配置好 LLM 后即可测试。</p>
+      <p>先用下方入口试听<strong>惠宝麦克风</strong>。后面的 ASR / LLM / TTS 卡片是电脑端的独立测试。</p>
+    </div>
+    <button class="btn ghost" type="button" @click="refreshSpeechStatus" :disabled="speech.statusBusy">[[ speech.statusBusy ? '读取中…' : '刷新配置状态' ]]</button>
+  </div>
+  <p class="speech-error" role="alert" v-if="speech.statusError">[[ speech.statusError ]]</p>
+  <section class="speech-robot" aria-labelledby="browser-audio-title">
+    <span class="speech-eyebrow">电脑接管 · 临时使用</span>
+    <h3 id="browser-audio-title">用电脑麦克风和扬声器与惠宝交流</h3>
+    <p>先用 USB 连接并选择机器人，再点击接管并允许麦克风。普通对话无需唤醒；说“惠宝，开启会议模式”立即录音，“惠宝，结束会议模式”停止保存并回到对话，不会自动生成纪要。会议中的普通发言仅用于录音和字幕。</p>
+    <div class="speech-actions">
+      <button type="button" class="btn primary" v-if="browserAudio.phase==='idle'" @click="startBrowserAudio" :disabled="!currentDeviceId||speech.robot.busy||speech.deviceMic.busy||speech.deviceMic.recording||speech.asr.recording||speech.asr.acquiring">使用电脑收音和播放</button>
+      <button type="button" class="btn ghost" v-else @click="releaseBrowserAudio" :disabled="browserAudio.phase==='releasing'">[[ browserAudio.phase==='releasing' ? '正在保存会议并退出…' : (browserAudio.phase==='active' ? '退出接管，恢复机器人' : '取消接管') ]]</button>
+      <button type="button" class="btn ghost" v-if="['active','releasing'].includes(browserAudio.phase)&&browserAudio.turnState!=='idle'" @click="stopBrowserAudio">停止回答</button>
+    </div>
+    <p role="status" aria-live="polite">[[ browserAudio.phase==='active' ? '电脑已接管收音和播放 · '+browserAudio.deviceId : browserAudio.phase==='acquiring' ? '等待麦克风授权…' : browserAudio.phase==='connecting' ? '正在连接机器人…' : browserAudio.phase==='releasing' ? '保存确认前继续保留电脑收音，请保持页面打开。' : '尚未接管' ]]</p>
+    <p v-if="browserAudio.recording" role="status">会议状态：[[ browserRecordingText() ]]</p>
+    <p v-if="['active','releasing'].includes(browserAudio.phase)" role="status" aria-live="polite">[[ browserTurnText() ]]；会议录音期间原始录音继续保留。</p>
+    <p v-if="browserAudio.turnError" class="speech-error" role="alert">[[ browserAudio.turnError ]]</p>
+    <p v-if="browserAudio.error" class="speech-error" role="alert">[[ browserAudio.error ]]</p>
+    <small>退出或切换设备会先停止并保存当前会议；失败时保留电脑收音。关闭页面或断线会中断会议并保留已录内容，不自动续录。请使用电脑 Chrome 或 Edge；接管期间保持页面打开。</small>
+  </section>
+  <section class="speech-robot speech-device-mic" aria-labelledby="speech-device-mic-title">
+    <span class="speech-eyebrow">实物收音 · 无需 ASR 配置</span>
+    <h3 id="speech-device-mic-title">惠宝麦克风 → 电脑回放</h3>
+    <p>点击录制后，请对惠宝说话。音频来自所选设备，不使用电脑麦克风；录制期间暂停该设备向语音服务送音频。最长 15 秒，结束后恢复原来的对话设置。</p>
+    <label class="speech-label" for="speech-device-mic-select">收音设备</label>
+    <select id="speech-device-mic-select" class="tinput" v-model="currentDeviceId" @change="switchDevice" :disabled="browserAudio.phase!=='idle'||speech.deviceMic.busy||speech.deviceMic.recording"><option value="">请选择已连接的设备</option><option v-for="d in devices" :key="d.device_id" :value="d.device_id">[[ d.display_name ]] · [[ d.device_id ]]</option></select>
+    <div class="speech-actions">
+      <button type="button" class="btn primary" @click="startDeviceMicTest" :disabled="browserAudio.phase!=='idle'||!currentDeviceId||speech.deviceMic.busy||speech.deviceMic.recording">[[ speech.deviceMic.busy ? '处理中…' : '录制惠宝麦克风 · 15 秒' ]]</button>
+      <button type="button" class="btn ghost" v-if="speech.deviceMic.recording" @click="stopDeviceMicTest" :disabled="speech.deviceMic.busy">停止并回放</button>
+    </div>
+    <div v-if="speech.deviceMic.stats" class="speech-mic-level">
+      <label>[[ speech.deviceMic.recording ? '● 正在收音' : '本次录音' ]] · 已收到 [[ speech.deviceMic.stats.seconds ]] 秒 · [[ speech.deviceMic.stats.batches ]] 批音频</label>
+      <meter min="-80" max="0" :value="speech.deviceMic.stats.rms_dbfs" aria-label="设备麦克风电平"></meter>
+      <small>当前电平 [[ speech.deviceMic.stats.rms_dbfs ]] dBFS · 全程峰值 [[ speech.deviceMic.stats.peak_dbfs ]] dBFS · [[ speech.deviceMic.stats.sample_rate||'等待' ]] Hz / 单声道 · USB 校验错误 [[ speech.deviceMic.stats.usb_crc_errors||0 ]]</small>
+    </div>
+    <p class="speech-success" role="status" v-if="speech.deviceMic.message">[[ speech.deviceMic.message ]]</p>
+    <p class="speech-error" role="alert" v-if="speech.deviceMic.error">[[ speech.deviceMic.error ]]</p>
+    <div class="speech-audio" v-if="speech.deviceMic.audioUrl"><span>惠宝实录 · [[ speech.deviceMic.deviceId ]] · 用电脑扬声器试听</span><audio controls preload="metadata" :src="speech.deviceMic.audioUrl"></audio><a :href="speech.deviceMic.audioUrl" download="xiaowai-device-microphone.wav">下载设备录音 WAV</a></div>
+    <small>先保持安静 2 秒，再靠近惠宝说一句话。电平变化说明有信号，是否清晰需要试听确认。录音在服务内存中最多保留 5 分钟；重新录制会覆盖上一段。</small>
+  </section>
+  <p class="speech-config-note">“配置已就绪”表示必需字段齐全；点击测试成功后才代表接口可用。测试失败时，错误会显示在对应卡片中。</p>
+  <div class="speech-cards">
+    <section class="speech-card" aria-labelledby="speech-asr-title">
+      <div class="speech-card-top"><span class="speech-step">01 · ASR</span><span class="speech-status" :class="{ready:speechIsReady('asr')}">[[ speechStatusText('asr') ]]</span></div>
+      <h3 id="speech-asr-title">说话 → 文字</h3>
+      <p class="speech-description">点击开始，用电脑麦克风说一句话，再点停止并识别。最长录音 60 秒，到时自动提交。</p>
+      <small class="speech-model">[[ speechModel('asr') ]]</small>
+      <div class="speech-actions">
+        <button type="button" class="btn primary" v-if="!speech.asr.recording" @click="startSpeechRecording" :disabled="browserAudio.phase!=='idle'||speech.asr.busy||speech.asr.acquiring">[[ speech.asr.acquiring ? '等待麦克风授权…' : '开始录音' ]]</button>
+        <button type="button" class="btn primary speech-stop" v-else @click="stopSpeechRecording">停止并识别 · [[ speech.asr.seconds ]] 秒</button>
+        <button type="button" class="btn ghost" v-if="speech.asr.recording||speech.asr.acquiring" @click="cancelSpeechRecording">取消录音</button>
+        <button type="button" class="btn ghost" v-if="speech.asr.busy" @click="cancelSpeechTest('asr')">停止等待</button>
+      </div>
+      <label class="speech-upload">也可以上传已有 WAV 录音
+        <input type="file" accept=".wav,audio/wav,audio/x-wav" @change="uploadSpeechWav" :disabled="speech.asr.busy||speech.asr.recording||speech.asr.acquiring">
+        <small>16 位 PCM WAV，8–48 kHz，最大 10 MiB。</small>
+      </label>
+      <div class="speech-recording" v-if="speech.asr.recording" role="status">● 正在录音 · [[ speech.asr.seconds ]] / 60 秒</div>
+      <div class="speech-waiting" v-if="speech.asr.busy" role="status">正在识别，已等待 [[ speech.asr.waiting ]] 秒…</div>
+      <div class="speech-result" aria-live="polite"><p class="speech-error" v-if="speech.asr.error">[[ speech.asr.error ]]</p><p class="speech-success" v-if="speech.asr.message">[[ speech.asr.message ]]</p></div>
+      <label class="speech-label" for="speech-asr-output">识别文字（可修改）</label>
+      <textarea id="speech-asr-output" class="tinput speech-textarea" v-model="speech.asr.text" placeholder="识别结果会显示在这里" :disabled="speech.asr.busy||speech.asr.recording||speech.asr.acquiring"></textarea>
+      <button type="button" class="btn ghost speech-next" @click="copySpeechToLlm" :disabled="!speech.asr.text.trim()||speech.llm.busy">填入第 2 步提问 →</button>
+      <div class="speech-audio" v-if="speech.asr.audioUrl"><span>试听刚才的录音</span><audio controls preload="metadata" :src="speech.asr.audioUrl"></audio></div>
+    </section>
+    <section class="speech-card" aria-labelledby="speech-llm-title">
+      <div class="speech-card-top"><span class="speech-step">02 · LLM</span><span class="speech-status" :class="{ready:speechIsReady('llm')}">[[ speechStatusText('llm') ]]</span></div>
+      <h3 id="speech-llm-title">文字提问 → 文字回复</h3>
+      <p class="speech-description">直接输入问题，或接收第 1 步的识别文字。每次发送是独立的单轮文字测试。</p>
+      <small class="speech-model">[[ speechModel('llm') ]]</small>
+      <label class="speech-label" for="speech-llm-input">你的问题</label>
+      <textarea id="speech-llm-input" ref="speechLlmInput" class="tinput speech-textarea" v-model="speech.llm.text" placeholder="输入问题，例如：你好，请介绍一下自己" :disabled="speech.llm.busy"></textarea>
+      <div class="speech-actions"><button type="button" class="btn primary" @click="runSpeechLlm" :disabled="speech.llm.busy||!speech.llm.text.trim()">[[ speech.llm.busy ? '等待回复…' : '发送问题' ]]</button><button type="button" class="btn ghost" v-if="speech.llm.busy" @click="cancelSpeechTest('llm')">停止等待</button></div>
+      <div class="speech-waiting" v-if="speech.llm.busy" role="status">大模型正在回复，已等待 [[ speech.llm.waiting ]] 秒…</div>
+      <div class="speech-result" aria-live="polite"><p class="speech-error" v-if="speech.llm.error">[[ speech.llm.error ]]</p><p class="speech-success" v-if="speech.llm.message">[[ speech.llm.message ]]</p></div>
+      <label class="speech-label" for="speech-llm-output">模型回复</label>
+      <textarea id="speech-llm-output" class="tinput speech-textarea" :value="speech.llm.reply" readonly placeholder="回复会显示在这里"></textarea>
+      <button type="button" class="btn ghost speech-next" @click="copySpeechToTts" :disabled="!speech.llm.reply.trim()||speech.tts.busy">填入第 3 步朗读 →</button>
+    </section>
+    <section class="speech-card" aria-labelledby="speech-tts-title">
+      <div class="speech-card-top"><span class="speech-step">03 · TTS</span><span class="speech-status" :class="{ready:speechIsReady('tts')}">[[ speechStatusText('tts') ]]</span></div>
+      <h3 id="speech-tts-title">文字 → 语音</h3>
+      <p class="speech-description">输入要朗读的文字，或接收第 2 步的回复。合成后点击播放器，用电脑扬声器试听。</p>
+      <small class="speech-model">[[ speechModel('tts') ]]</small>
+      <label class="speech-label" for="speech-tts-input">朗读文字（最多 300 字）</label>
+      <textarea id="speech-tts-input" ref="speechTtsInput" class="tinput speech-textarea" v-model="speech.tts.text" placeholder="输入要合成语音的文字" :disabled="speech.tts.busy"></textarea>
+      <small class="speech-count">[[ Array.from(speech.tts.text).length ]] / 300 字</small>
+      <div class="speech-actions"><button type="button" class="btn primary" @click="runSpeechTts" :disabled="speech.tts.busy||!speech.tts.text.trim()">[[ speech.tts.busy ? '合成中…' : '合成语音' ]]</button><button type="button" class="btn ghost" v-if="speech.tts.busy" @click="cancelSpeechTest('tts')">停止等待</button></div>
+      <div class="speech-waiting" v-if="speech.tts.busy" role="status">正在合成，已等待 [[ speech.tts.waiting ]] 秒…</div>
+      <div class="speech-result" aria-live="polite"><p class="speech-error" v-if="speech.tts.error">[[ speech.tts.error ]]</p><p class="speech-success" v-if="speech.tts.message">[[ speech.tts.message ]]</p></div>
+      <div class="speech-audio" v-if="speech.tts.audioUrl"><span>合成结果 · 点击播放</span><audio controls preload="metadata" :src="speech.tts.audioUrl"></audio><a :href="speech.tts.audioUrl" download="longshu-tts-test.wav">下载音频</a></div>
+      <div class="speech-empty" v-else>合成成功后，这里会出现音频播放器。</div>
+    </section>
+  </div>
+  <div class="speech-footnote"><strong>上方三个测试只验证电脑端模型调用。</strong>每个接口只会在你点击测试按钮时调用；测试通过后，再用下方入口验收机器人麦克风与扬声器。</div>
+  <section class="speech-robot" aria-labelledby="speech-robot-title">
+    <div class="speech-robot-head"><div><span class="speech-eyebrow">连接实物 · 免唤醒对话</span><h3 id="speech-robot-title">让惠宝听你说话</h3></div><span class="speech-status" :class="{ready:speechRobotReady()}">[[ speechRobotState() ]]</span></div>
+    <p>用 USB 连接机器人并选择设备，点击「开始免唤醒对话」。状态就绪后，直接对<strong>机器人麦克风</strong>说话，停顿后等待它从自己的扬声器回复，不用喊唤醒词。</p>
+    <label class="speech-label" for="speech-robot-select">当前机器人</label>
+    <select id="speech-robot-select" class="tinput" v-model="currentDeviceId" @change="switchDevice" :disabled="browserAudio.phase!=='idle'||speech.robot.busy"><option value="">请选择已连接的设备</option><option v-for="d in devices" :key="d.device_id" :value="d.device_id">[[ d.display_name ]] · [[ d.device_id ]]</option></select>
+    <div class="speech-actions"><button type="button" class="btn primary" @click="startSpeechRobot" :disabled="browserAudio.phase!=='idle'||!currentDeviceId||speech.robot.busy">[[ speech.robot.busy ? '正在设置…' : '开始免唤醒对话' ]]</button><button type="button" class="btn ghost" @click="pauseSpeechRobot" :disabled="browserAudio.phase!=='idle'||!currentDeviceId||speech.robot.busy">暂停机器人收音</button><button type="button" class="btn ghost" @click="refreshSpeechRobot" :disabled="!currentDeviceId||speech.robot.loading">[[ speech.robot.loading ? '读取中…' : '刷新连接状态' ]]</button><a class="btn ghost" href="/devices">连接设备</a></div>
+    <div class="speech-actions"><button type="button" class="btn ghost" @click="stopSpeechRobot" :disabled="browserAudio.phase!=='idle'||!currentDeviceId||speech.robot.stopBusy">[[ speech.robot.stopBusy ? '正在停止，等待播放确认…' : '停止所选机器人回答' ]]</button></div>
+    <p v-if="browserAudio.phase==='idle'&&currentDeviceId" role="status" aria-live="polite">[[ speechRobotDialogueText() ]]</p>
+    <div class="speech-result" aria-live="polite"><p class="speech-error" v-if="speech.robot.error">[[ speech.robot.error ]]</p><p class="speech-error" v-if="speech.robot.statusError">[[ speech.robot.statusError ]]</p><p class="speech-success" v-if="speech.robot.message">[[ speech.robot.message ]]</p></div>
+    <small>开关保存为本机偏好；当前命令发往所选设备，多设备连接时可能同步受影响。录音测试时可先暂停机器人收音，避免两路同时识别。</small>
+  </section>
+</section>

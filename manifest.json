@@ -1,0 +1,61 @@
+{
+  "name": "dsh-huibao-bot",
+  "unit": "dsh-huibao-bot",
+  "version": "0.3.2",
+  "previousVersion": "0.3.1",
+  "title": "汇报助手（惠Bot / 小歪）",
+  "kind": "plugin",
+  "services": [
+    "huibao-core",
+    "huibao-web",
+    "dsh-ollama-shim"
+  ],
+  "ports": [
+    9000,
+    5050
+  ],
+  "pluginDir": "@local/huibao-bot",
+  "hasVenv": true,
+  "hasNode": false,
+  "hasHarness": false,
+  "generatedAt": "2026-11-10T12:49:27+08:00",
+  "host": "lgsj",
+  "installScope": [
+    "host-profile",
+    "all-existing-accounts"
+  ],
+  "baseRepo": "imasonhk-spec/dsh",
+  "baseTag": "v0.2.0",
+  "fsEntries": [
+    {
+      "src": "/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service",
+      "dst": "fs/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service",
+      "type": "dir"
+    },
+    {
+      "src": "/home/lgsj/dsh-ollama-shim",
+      "dst": "fs/home/lgsj/dsh-ollama-shim",
+      "type": "dir"
+    },
+    {
+      "src": "/usr/local/bin/node",
+      "dst": "fs/usr/local/bin/node",
+      "type": "symlink",
+      "target": "/usr/local/node/bin/node"
+    }
+  ],
+  "aptProvides": [],
+  "runtimeFrom": [
+    "/usr/local/node"
+  ],
+  "pathRemap": [
+    {
+      "from": "/home/lgsj/.dsh",
+      "to": "@DSH_HOME@"
+    },
+    {
+      "from": "/home/lgsj",
+      "to": "@USER_HOME@"
+    }
+  ]
+}

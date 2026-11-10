@@ -1,0 +1,9 @@
+{
+  "version": "0.0.61",
+  "file": "deskbot_v2.bin",
+  "build_required": false,
+  "build_profile": "longshu_xiaowai_full",
+  "chip": "esp32s3",
+  "flash_offset": "0x10000",
+  "flash_size": "8MB"
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=Huibao PC Core (robot USB and API :9000)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lgsj
+Group=lgsj
+WorkingDirectory=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service
+EnvironmentFile=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service/.venv/bin/python -m deskbot_server
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
