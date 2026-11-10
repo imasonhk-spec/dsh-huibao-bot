@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PKG_NAME="dsh-huibao-bot"
-PKG_VERSION="0.3.0"
+PKG_VERSION="0.3.1"
 PLUGIN_DIR="@local/huibao-bot"
 SERVICES="huibao-core huibao-web dsh-ollama-shim"
 

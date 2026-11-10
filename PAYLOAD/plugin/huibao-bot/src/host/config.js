@@ -6,7 +6,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolvePath } from './paths.js'; /* PATCH:S2-paths */
 
 export function dshHome() {
   const h = process.env.DSH_HOME;
@@ -18,15 +17,9 @@ export function dataRoot() {
   return path.join(dshHome(), 'huibao-bot');
 }
 
-/* PATCH:S2-paths —— 四级探测：HUIBAO_SERVICE_DIR → $DSH_HOME/xiaowai-service
- *   → 包内 bundled/xiaowai-service → 旧部署路径兜底 */
-export const SERVICE_DIR = resolvePath({
-  envKeys: ['HUIBAO_SERVICE_DIR'],
-  dshSub: 'xiaowai-service',
-  bundled: 'bundled/xiaowai-service',
-  legacy: ['/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service'],
-  fallback: path.join(dshHome(), 'xiaowai-service'),
-});
+export const SERVICE_DIR =
+  process.env.HUIBAO_SERVICE_DIR ||
+  '/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service';
 
 // 默认值刻意与 R6 出厂配置对齐：语音走 modelhub 网关，汇报稿走轻量模型。
 export const DEFAULT_CONFIG = {

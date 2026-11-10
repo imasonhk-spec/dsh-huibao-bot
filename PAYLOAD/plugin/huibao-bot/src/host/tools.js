@@ -110,7 +110,7 @@ export function registerTools(ctx) {
         description: def.description,
         parameters: def.parameters,
         output: TEXT_OUTPUT,
-        execute: async (...__a) => { { const L = globalThis.__DSH_LIC__ && globalThis.__DSH_LIC__['huibao-bot']; if (L) { if (['huibao_daily_digest', 'huibao_today', 'huibao_device_status'].includes(def.name)) { const __s = await L.gate.state(); if (!__s.ready) throw new Error('本插件需要有效授权（huibao-bot）：请打开 /api/huibao-bot/license/ui 激活或导入离线包'); } else { if (!(await L.gate.allow()).allowed) throw new Error('本插件需要有效授权（huibao-bot）：请打开 /api/huibao-bot/license/ui 激活或导入离线包'); } } } /* WB-USE-BILL-V2 */ return def.execute(...__a); },
+        execute: def.execute,
       });
       if (typeof dispose === 'function') disposers.push(dispose);
     } catch (error) {

@@ -1,4 +1,4 @@
-# dsh-huibao-bot 0.3.0
+# dsh-huibao-bot 0.3.1
 
 汇报助手（惠Bot / 小歪）
 
@@ -20,8 +20,8 @@
 ## 安装
 
 ```bash
-tar -xzf dsh-huibao-bot-0.3.0.tar.gz
-cd dsh-huibao-bot-0.3.0
+tar -xzf dsh-huibao-bot-0.3.1.tar.gz
+cd dsh-huibao-bot-0.3.1
 sudo ./install.sh
 ```
 

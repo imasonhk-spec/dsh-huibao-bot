@@ -9,13 +9,13 @@
 
 | 组件 | 路径 / 地址 |
 | --- | --- |
-| 小歪语音服务（deskbot-server + LiveKit + LampGo worker） | `${DSH_HOME}/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service` |
-| 服务控制脚本 | `${DSH_HOME}/01-DSH/11-汇报机器人/服务控制.sh`（`start/stop/restart/status/logs`） |
-| DSH 插件源码 | `${DSH_HOME}/01-DSH/12-汇报助手/huibao-bot` |
+| 小歪语音服务（deskbot-server + LiveKit + LampGo worker） | `/home/lgsj/01-DSH/11-汇报机器人/longshu-xiaowai-v2-upstream-full-r6/service` |
+| 服务控制脚本 | `/home/lgsj/01-DSH/11-汇报机器人/服务控制.sh`（`start/stop/restart/status/logs`） |
+| DSH 插件源码 | `/home/lgsj/01-DSH/12-汇报助手/huibao-bot` |
 | 插件安装位置 | `~/.dsh/profiles/web/node_modules/@local/huibao-bot`（pnpm link） |
 | 插件运行数据 | `~/.dsh/huibao-bot/{config.json,state.json}` |
 | DSH web 工作台 | `http://127.0.0.1:3080`（对外 `dsh.ilica.cn`） |
-| host 启动命令备份 | `${DSH_HOME}/01-DSH/12-汇报助手/host.cmdline.txt` |
+| host 启动命令备份 | `/home/lgsj/01-DSH/12-汇报助手/host.cmdline.txt` |
 
 ### 端口
 
@@ -121,7 +121,7 @@ bash ~/01-DSH/11-汇报机器人/服务控制.sh status
 1. **会议数据为空**：需要会议助手（dsh-meetai）先同步一次会议，之后日程自动进汇报；
 2. **项目/供应链进度是扩展位**：接产品库（8899）或表格时，只需在 `sources.js` 加一个 provider 并在 `config.projects` 打开开关；
 3. **pnpm 必须是 12.x（JS 版）**：本机 `/usr/local/bin/pnpm`（compiled binary）对 npm 镜像的 TLS 握手会被重置，
-   安装插件请用 `node ${DSH_HOME}/pnpm-new/node_modules/pnpm/bin/pnpm.mjs`；
+   安装插件请用 `node /home/lgsj/pnpm-new/node_modules/pnpm/bin/pnpm.mjs`；
 4. **ffmpeg / 串口权限**：已加 `/etc/udev/rules.d/99-deskbot.rules`（ESP32-S3 VID `303a` 权限 0666），
    并把 `lgsj` 加入 `dialout` 组（**需重新登录会话生效**）；`ffmpeg` 未装上，但**不在关键路径**
    （云端 TTS 直接返回 WAV，设备侧 opus 由 opuslib 编码）；
@@ -139,6 +139,6 @@ bash ~/01-DSH/11-汇报机器人/服务控制.sh status
 # 插件回滚（移除 bundle + 依赖）
 cd ~/.dsh/profiles/web
 cp package.json.bak-huibao2-* package.json       # 选加插件之前的备份
-node ${DSH_HOME}/pnpm-new/node_modules/pnpm/bin/pnpm.mjs install --no-frozen-lockfile
+node /home/lgsj/pnpm-new/node_modules/pnpm/bin/pnpm.mjs install --no-frozen-lockfile
 # 然后按 host.cmdline.txt 重启 host
 ```
